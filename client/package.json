@@ -1,0 +1,26 @@
+{
+  "name": "rocket-client",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "build:helpdesk": "tsc && vite build --mode helpdesk --outDir dist-helpdesk",
+    "build:cms": "tsc && vite build --mode cms --outDir dist-cms",
+    "dev:helpdesk": "vite --mode helpdesk",
+    "dev:cms": "vite --mode cms",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "solid-js": "^1.9.0",
+    "@solidjs/router": "^0.15.0"
+  },
+  "devDependencies": {
+    "vite": "^6.0.0",
+    "vite-plugin-solid": "^2.11.0",
+    "typescript": "^5.7.0",
+    "tailwindcss": "^3.4.0",
+    "postcss": "^8.4.0",
+    "autoprefixer": "^10.4.0"
+  }
+}

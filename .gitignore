@@ -1,0 +1,42 @@
+.env
+# Go
+backend/golang/server
+backend/golang/*.exe
+
+# Node.js
+backend/expressjs/node_modules/
+backend/expressjs/dist/
+backend/expressjs/.env
+
+# Admin UI
+admin/node_modules/
+admin/dist/
+
+# Client UI
+client/node_modules/
+client/dist/
+client/dist-*/
+client/.vite/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# SQLite data files
+backend/golang/data/
+backend/elixir-phoenix/data/
+
+# File uploads
+uploads/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Binaries
+*.exe
+*.dll
+*.so
+*.dylib

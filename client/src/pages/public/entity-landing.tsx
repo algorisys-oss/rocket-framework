@@ -1,0 +1,178 @@
+import { createSignal, createEffect, Show, For } from "solid-js";
+import { useNavigate, useParams } from "@solidjs/router";
+import { listRecords } from "../../api/data";
+import { getEntityUIConfig } from "../../stores/ui-config";
+import { addToast } from "../../stores/notifications";
+import { isApiError } from "../../types/api";
+import type { LandingPageConfig, CardConfig } from "../../types/ui-config";
+import PostCard from "../../components/post-card";
+import Pagination from "../../components/pagination";
+
+export default function EntityLandingPage() {
+  const params = useParams();
+  const navigate = useNavigate();
+
+  const [records, setRecords] = createSignal<Record<string, unknown>[]>([]);
+  const [total, setTotal] = createSignal(0);
+  const [page, setPage] = createSignal(1);
+  const [loading, setLoading] = createSignal(true);
+  const [config, setConfig] = createSignal<LandingPageConfig | null>(null);
+
+  const entityName = () => params.entity;
+
+  createEffect(() => {
+    const entity = entityName();
+    if (!entity) return;
+
+    setPage(1);
+    setRecords([]);
+
+    const uiConfig = getEntityUIConfig(entity);
+    if (uiConfig?.pages?.landing) {
+      setConfig(uiConfig.pages.landing);
+      fetchData(entity, uiConfig.pages.landing);
+    } else {
+      // Default config
+      const defaultConfig: LandingPageConfig = {
+        route: `/pages/${entity}`,
+        title: entity.charAt(0).toUpperCase() + entity.slice(1) + "s",
+        layout: "card-grid",
+        data: {
+          sort: "-created_at",
+          per_page: 12,
+        },
+        card: {
+          title: "title",
+          excerpt: "description",
+          date: "created_at",
+        },
+      };
+      setConfig(defaultConfig);
+      fetchData(entity, defaultConfig);
+    }
+  });
+
+  async function fetchData(entity: string, cfg: LandingPageConfig) {
+    setLoading(true);
+    try {
+      const dataConfig = cfg.data ?? {};
+      const filterMap: Record<string, string> = {};
+
+      if (dataConfig.filter) {
+        for (const [key, value] of Object.entries(dataConfig.filter)) {
+          filterMap[`filter[${key}]`] = String(value);
+        }
+      }
+
+      const res = await listRecords(entity, {
+        page: page(),
+        per_page: dataConfig.per_page ?? 12,
+        sort: dataConfig.sort ?? "-created_at",
+        include: dataConfig.include,
+        filters: filterMap,
+      });
+
+      setRecords(res.data);
+      setTotal(res.meta?.total ?? res.data.length);
+    } catch (err) {
+      if (isApiError(err)) {
+        addToast("error", err.error.message);
+      } else {
+        addToast("error", `Failed to fetch ${entity} records`);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handlePageChange(p: number) {
+    setPage(p);
+    const cfg = config();
+    const entity = entityName();
+    if (cfg && entity) fetchData(entity, cfg);
+  }
+
+  function handleCardClick(record: Record<string, unknown>) {
+    const id = record.slug ?? record.id;
+    if (id) {
+      navigate(`/pages/${entityName()}/${id}`);
+    }
+  }
+
+  const cardConfig = (): CardConfig => {
+    return (
+      config()?.card ?? {
+        title: "title",
+        excerpt: "description",
+        date: "created_at",
+      }
+    );
+  };
+
+  const perPage = () => config()?.data?.per_page ?? 12;
+
+  return (
+    <div>
+      <div class="public-page-header">
+        <h1 class="public-page-title">{config()?.title ?? entityName()}</h1>
+        <Show when={config()?.subtitle}>
+          <p class="public-page-subtitle">{config()!.subtitle}</p>
+        </Show>
+      </div>
+
+      <Show when={loading()}>
+        <div class="public-loading">
+          <div class="public-spinner" />
+        </div>
+      </Show>
+
+      <Show when={!loading()}>
+        <Show
+          when={records().length > 0}
+          fallback={
+            <div class="public-empty">
+              <svg
+                class="public-empty-icon"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.5"
+                  d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"
+                />
+              </svg>
+              <p class="public-empty-text">No records found</p>
+            </div>
+          }
+        >
+          <div class="post-card-grid">
+            <For each={records()}>
+              {(record) => (
+                <PostCard
+                  record={record}
+                  config={cardConfig()}
+                  onClick={() => handleCardClick(record)}
+                />
+              )}
+            </For>
+          </div>
+
+          <Show when={total() > perPage()}>
+            <div class="mt-8">
+              <Pagination
+                page={page()}
+                perPage={perPage()}
+                total={total()}
+                onPageChange={handlePageChange}
+                hidePerPage
+              />
+            </div>
+          </Show>
+        </Show>
+      </Show>
+    </div>
+  );
+}

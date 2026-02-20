@@ -1,0 +1,420 @@
+package engine
+
+import (
+	"errors"
+	"fmt"
+
+	"github.com/gofiber/fiber/v2"
+
+	"rocket-backend/internal/instrument"
+	"rocket-backend/internal/metadata"
+	"rocket-backend/internal/store"
+)
+
+type Handler struct {
+	store    *store.Store
+	registry *metadata.Registry
+}
+
+func NewHandler(s *store.Store, reg *metadata.Registry) *Handler {
+	return &Handler{store: s, registry: reg}
+}
+
+// List handles GET /api/:entity
+func (h *Handler) List(c *fiber.Ctx) error {
+	ctx := c.UserContext()
+	ctx, span := instrument.GetInstrumenter(ctx).StartSpan(ctx, "engine", "handler", "record.list")
+	defer span.End()
+	c.SetUserContext(ctx)
+
+	entity, err := h.resolveEntity(c)
+	if err != nil {
+		span.SetStatus("error")
+		return err
+	}
+	span.SetEntity(entity.Name, "")
+
+	user := getUser(c)
+	if err := CheckPermission(c.Context(), user, entity.Name, "read", h.registry, nil); err != nil {
+		span.SetStatus("error")
+		return err
+	}
+
+	plan, err := ParseQueryParams(c, entity, h.registry)
+	if err != nil {
+		span.SetStatus("error")
+		return err
+	}
+
+	// Inject row-level security filters
+	if filters := GetReadFilters(user, entity.Name, h.registry); len(filters) > 0 {
+		plan.Filters = append(plan.Filters, filters...)
+	}
+
+	// Execute data query
+	qr := BuildSelectSQL(plan, h.store.Dialect)
+	rows, err := store.QueryRows(c.Context(), h.store.DB, qr.SQL, qr.Params...)
+	if err != nil {
+		span.SetStatus("error")
+		span.SetMetadata("error", err.Error())
+		return fmt.Errorf("list %s: %w", entity.Name, err)
+	}
+
+	// Execute count query
+	cr := BuildCountSQL(plan, h.store.Dialect)
+	countRow, err := store.QueryRow(c.Context(), h.store.DB, cr.SQL, cr.Params...)
+	if err != nil {
+		span.SetStatus("error")
+		span.SetMetadata("error", err.Error())
+		return fmt.Errorf("count %s: %w", entity.Name, err)
+	}
+	total := countRow["count"]
+
+	// Load includes
+	if len(plan.Includes) > 0 {
+		if err := LoadIncludes(c.Context(), h.store.DB, h.store.Dialect, h.registry, entity, rows, plan.Includes); err != nil {
+			span.SetStatus("error")
+			span.SetMetadata("error", err.Error())
+			return fmt.Errorf("load includes: %w", err)
+		}
+	}
+
+	// Ensure non-nil slice for JSON
+	if rows == nil {
+		rows = []map[string]any{}
+	}
+
+	span.SetStatus("ok")
+	return c.JSON(fiber.Map{
+		"data": rows,
+		"meta": fiber.Map{
+			"page":     plan.Page,
+			"per_page": plan.PerPage,
+			"total":    total,
+		},
+	})
+}
+
+// GetByID handles GET /api/:entity/:id
+func (h *Handler) GetByID(c *fiber.Ctx) error {
+	ctx := c.UserContext()
+	ctx, span := instrument.GetInstrumenter(ctx).StartSpan(ctx, "engine", "handler", "record.get")
+	defer span.End()
+	c.SetUserContext(ctx)
+
+	entity, err := h.resolveEntity(c)
+	if err != nil {
+		span.SetStatus("error")
+		return err
+	}
+
+	id := c.Params("id")
+	span.SetEntity(entity.Name, id)
+
+	user := getUser(c)
+	if err := CheckPermission(c.Context(), user, entity.Name, "read", h.registry, nil); err != nil {
+		span.SetStatus("error")
+		return err
+	}
+
+	row, err := fetchRecord(c.Context(), h.store.DB, entity, id, h.store.Dialect)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			span.SetStatus("error")
+			return respondError(c, NotFoundError(entity.Name, id))
+		}
+		span.SetStatus("error")
+		span.SetMetadata("error", err.Error())
+		return fmt.Errorf("get %s/%s: %w", entity.Name, id, err)
+	}
+
+	// Load includes
+	includes := parseIncludes(c)
+	if len(includes) > 0 {
+		rows := []map[string]any{row}
+		if err := LoadIncludes(c.Context(), h.store.DB, h.store.Dialect, h.registry, entity, rows, includes); err != nil {
+			span.SetStatus("error")
+			span.SetMetadata("error", err.Error())
+			return fmt.Errorf("load includes: %w", err)
+		}
+		row = rows[0]
+	}
+
+	span.SetStatus("ok")
+	return c.JSON(fiber.Map{"data": row})
+}
+
+// Create handles POST /api/:entity
+func (h *Handler) Create(c *fiber.Ctx) error {
+	ctx := c.UserContext()
+	ctx, span := instrument.GetInstrumenter(ctx).StartSpan(ctx, "engine", "handler", "record.create")
+	defer span.End()
+	c.SetUserContext(ctx)
+
+	entity, err := h.resolveEntity(c)
+	if err != nil {
+		span.SetStatus("error")
+		return err
+	}
+	span.SetEntity(entity.Name, "")
+
+	user := getUser(c)
+	if err := CheckPermission(c.Context(), user, entity.Name, "create", h.registry, nil); err != nil {
+		span.SetStatus("error")
+		return err
+	}
+
+	var body map[string]any
+	if err := c.BodyParser(&body); err != nil {
+		span.SetStatus("error")
+		return respondError(c, NewAppError("INVALID_PAYLOAD", 400, "Invalid JSON body"))
+	}
+
+	plan, validationErrs := PlanWrite(entity, h.registry, body, nil)
+	if len(validationErrs) > 0 {
+		span.SetStatus("error")
+		return respondError(c, ValidationError(validationErrs))
+	}
+	plan.User = user
+
+	record, err := ExecuteWritePlan(c.Context(), h.store, h.registry, plan)
+	if err != nil {
+		span.SetStatus("error")
+		span.SetMetadata("error", err.Error())
+		return handleWriteError(c, err)
+	}
+
+	span.SetStatus("ok")
+	return c.Status(201).JSON(fiber.Map{"data": record})
+}
+
+// Update handles PUT /api/:entity/:id
+func (h *Handler) Update(c *fiber.Ctx) error {
+	ctx := c.UserContext()
+	ctx, span := instrument.GetInstrumenter(ctx).StartSpan(ctx, "engine", "handler", "record.update")
+	defer span.End()
+	c.SetUserContext(ctx)
+
+	entity, err := h.resolveEntity(c)
+	if err != nil {
+		span.SetStatus("error")
+		return err
+	}
+
+	id := c.Params("id")
+	span.SetEntity(entity.Name, id)
+
+	// Verify record exists and check permissions against current state
+	currentRecord, err := fetchRecord(c.Context(), h.store.DB, entity, id, h.store.Dialect)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			span.SetStatus("error")
+			return respondError(c, NotFoundError(entity.Name, id))
+		}
+		span.SetStatus("error")
+		span.SetMetadata("error", err.Error())
+		return fmt.Errorf("fetch %s/%s: %w", entity.Name, id, err)
+	}
+
+	user := getUser(c)
+	if err := CheckPermission(c.Context(), user, entity.Name, "update", h.registry, currentRecord); err != nil {
+		span.SetStatus("error")
+		return err
+	}
+
+	var body map[string]any
+	if err := c.BodyParser(&body); err != nil {
+		span.SetStatus("error")
+		return respondError(c, NewAppError("INVALID_PAYLOAD", 400, "Invalid JSON body"))
+	}
+
+	plan, validationErrs := PlanWrite(entity, h.registry, body, id)
+	if len(validationErrs) > 0 {
+		span.SetStatus("error")
+		return respondError(c, ValidationError(validationErrs))
+	}
+	plan.User = user
+
+	record, err := ExecuteWritePlan(c.Context(), h.store, h.registry, plan)
+	if err != nil {
+		span.SetStatus("error")
+		span.SetMetadata("error", err.Error())
+		return handleWriteError(c, err)
+	}
+
+	span.SetStatus("ok")
+	return c.JSON(fiber.Map{"data": record})
+}
+
+// Delete handles DELETE /api/:entity/:id
+func (h *Handler) Delete(c *fiber.Ctx) error {
+	ctx := c.UserContext()
+	ctx, span := instrument.GetInstrumenter(ctx).StartSpan(ctx, "engine", "handler", "record.delete")
+	defer span.End()
+	c.SetUserContext(ctx)
+
+	entity, err := h.resolveEntity(c)
+	if err != nil {
+		span.SetStatus("error")
+		return err
+	}
+
+	id := c.Params("id")
+	span.SetEntity(entity.Name, id)
+
+	// Check permissions against current record
+	currentRecord, err := fetchRecord(c.Context(), h.store.DB, entity, id, h.store.Dialect)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			span.SetStatus("error")
+			return respondError(c, NotFoundError(entity.Name, id))
+		}
+		span.SetStatus("error")
+		span.SetMetadata("error", err.Error())
+		return fmt.Errorf("fetch %s/%s: %w", entity.Name, id, err)
+	}
+
+	user := getUser(c)
+	if err := CheckPermission(c.Context(), user, entity.Name, "delete", h.registry, currentRecord); err != nil {
+		span.SetStatus("error")
+		return err
+	}
+
+	tx, err := h.store.BeginTx(c.Context())
+	if err != nil {
+		span.SetStatus("error")
+		span.SetMetadata("error", err.Error())
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	// Handle cascades
+	if err := HandleCascadeDelete(c.Context(), tx, h.store.Dialect, h.registry, entity, id); err != nil {
+		var appErr *AppError
+		if errors.As(err, &appErr) {
+			span.SetStatus("error")
+			return respondError(c, appErr)
+		}
+		span.SetStatus("error")
+		span.SetMetadata("error", err.Error())
+		return fmt.Errorf("cascade delete: %w", err)
+	}
+
+	// Delete the record
+	var sql string
+	var params []any
+	if entity.SoftDelete {
+		sql, params = BuildSoftDeleteSQL(entity, id, h.store.Dialect)
+	} else {
+		sql, params = BuildHardDeleteSQL(entity, id, h.store.Dialect)
+	}
+
+	affected, err := store.Exec(c.Context(), tx, sql, params...)
+	if err != nil {
+		span.SetStatus("error")
+		span.SetMetadata("error", err.Error())
+		return fmt.Errorf("delete %s/%s: %w", entity.Name, id, err)
+	}
+	if affected == 0 {
+		span.SetStatus("error")
+		return respondError(c, NotFoundError(entity.Name, id))
+	}
+
+	// Pre-commit: fire sync (before_delete) webhooks
+	if err := FireSyncWebhooks(c.Context(), tx, h.store.Dialect, h.registry, "before_delete", entity.Name, "delete", currentRecord, nil, user); err != nil {
+		span.SetStatus("error")
+		span.SetMetadata("error", err.Error())
+		return fmt.Errorf("sync webhook: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		span.SetStatus("error")
+		span.SetMetadata("error", err.Error())
+		return fmt.Errorf("commit: %w", err)
+	}
+
+	// Post-commit: fire async (after_delete) webhooks
+	FireAsyncWebhooks(c.Context(), h.store, h.registry, "after_delete", entity.Name, "delete", currentRecord, nil, user)
+
+	span.SetStatus("ok")
+	return c.JSON(fiber.Map{"data": fiber.Map{"id": id}})
+}
+
+func (h *Handler) resolveEntity(c *fiber.Ctx) (*metadata.Entity, error) {
+	name := c.Params("entity")
+	entity := h.registry.GetEntity(name)
+	if entity == nil {
+		return nil, UnknownEntityError(name)
+	}
+	return entity, nil
+}
+
+func getUser(c *fiber.Ctx) *metadata.UserContext {
+	user, _ := c.Locals("user").(*metadata.UserContext)
+	return user
+}
+
+func respondError(c *fiber.Ctx, appErr *AppError) error {
+	return c.Status(appErr.Status).JSON(ErrorResponse{Error: appErr})
+}
+
+func handleWriteError(c *fiber.Ctx, err error) error {
+	var appErr *AppError
+	if errors.As(err, &appErr) {
+		return respondError(c, appErr)
+	}
+
+	if errors.Is(err, store.ErrUniqueViolation) {
+		return respondError(c, ConflictError("A record with this value already exists"))
+	}
+
+	return err
+}
+
+func parseIncludes(c *fiber.Ctx) []string {
+	inc := c.Query("include")
+	if inc == "" {
+		return nil
+	}
+	var includes []string
+	for _, name := range splitAndTrim(inc) {
+		includes = append(includes, name)
+	}
+	return includes
+}
+
+func splitAndTrim(s string) []string {
+	parts := make([]string, 0)
+	for _, p := range splitComma(s) {
+		trimmed := trimSpace(p)
+		if trimmed != "" {
+			parts = append(parts, trimmed)
+		}
+	}
+	return parts
+}
+
+func splitComma(s string) []string {
+	var parts []string
+	start := 0
+	for i := 0; i < len(s); i++ {
+		if s[i] == ',' {
+			parts = append(parts, s[start:i])
+			start = i + 1
+		}
+	}
+	parts = append(parts, s[start:])
+	return parts
+}
+
+func trimSpace(s string) string {
+	start := 0
+	end := len(s)
+	for start < end && s[start] == ' ' {
+		start++
+	}
+	for end > start && s[end-1] == ' ' {
+		end--
+	}
+	return s[start:end]
+}

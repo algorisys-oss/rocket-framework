@@ -1,0 +1,354 @@
+@layer components {
+  .form-group {
+    @apply flex flex-col gap-1.5;
+  }
+
+  .form-row {
+    @apply grid grid-cols-2 gap-4;
+  }
+
+  .form-label {
+    @apply text-sm font-medium text-gray-700 dark:text-gray-300;
+  }
+
+  .form-input {
+    @apply block w-full rounded-md border border-gray-300
+           px-3 py-2 text-sm placeholder-gray-400
+           focus:border-blue-500 focus:ring-1 focus:ring-blue-500
+           focus:outline-none transition-colors
+           dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100
+           dark:placeholder-gray-500;
+  }
+
+  .form-input-error {
+    @apply border-red-500 focus:border-red-500 focus:ring-red-500
+           dark:border-red-400 dark:focus:border-red-400 dark:focus:ring-red-400;
+  }
+
+  .form-select {
+    @apply form-input appearance-none bg-white
+           bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%236b7280%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M5.23%207.21a.75.75%200%20011.06.02L10%2011.168l3.71-3.938a.75.75%200%20111.08%201.04l-4.25%204.5a.75.75%200%2001-1.08%200l-4.25-4.5a.75.75%200%2001.02-1.06z%22%20clip-rule%3D%22evenodd%22%2F%3E%3C%2Fsvg%3E')]
+           bg-no-repeat bg-[position:right_0.5rem_center] bg-[length:1.25rem]
+           pr-8 dark:bg-gray-700;
+  }
+
+  .form-checkbox {
+    @apply h-4 w-4 rounded border-gray-300 text-blue-600
+           focus:ring-blue-500 cursor-pointer dark:border-gray-600;
+  }
+
+  .form-toggle {
+    @apply relative inline-flex h-6 w-11 items-center rounded-full
+           transition-colors cursor-pointer flex-shrink-0;
+  }
+
+  .form-toggle-on {
+    @apply bg-blue-600;
+  }
+
+  .form-toggle-off {
+    @apply bg-gray-300 dark:bg-gray-600;
+  }
+
+  .form-toggle-knob {
+    @apply inline-block h-4 w-4 rounded-full bg-white
+           transition-transform shadow-sm;
+  }
+
+  .form-toggle-knob-on {
+    @apply translate-x-6;
+  }
+
+  .form-toggle-knob-off {
+    @apply translate-x-1;
+  }
+
+  .form-error-text {
+    @apply text-xs text-red-600 dark:text-red-400;
+  }
+
+  .form-help-text {
+    @apply text-xs text-gray-500 dark:text-gray-400;
+  }
+
+  .tag-list {
+    @apply flex flex-wrap gap-1.5;
+  }
+
+  .tag {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs
+           bg-blue-100 text-blue-800
+           dark:bg-blue-900/50 dark:text-blue-300;
+  }
+
+  .tag-remove {
+    @apply text-blue-500 hover:text-blue-700 cursor-pointer font-bold
+           dark:text-blue-400 dark:hover:text-blue-200;
+  }
+
+  /* Quick Add dropdown */
+  .quick-add-wrap {
+    @apply relative;
+  }
+
+  .quick-add-menu {
+    @apply absolute right-0 top-full mt-1 w-64 bg-white border border-gray-200
+           rounded-lg shadow-lg z-50 py-1 max-h-80 overflow-y-auto
+           dark:bg-gray-800 dark:border-gray-700;
+  }
+
+  .quick-add-item {
+    @apply w-full text-left px-3 py-2 hover:bg-blue-50 flex flex-col gap-0.5
+           border-none bg-transparent cursor-pointer transition-colors
+           dark:hover:bg-blue-900/30;
+  }
+
+  .quick-add-item-label {
+    @apply text-sm font-medium text-gray-800 dark:text-gray-200;
+  }
+
+  .quick-add-item-desc {
+    @apply text-xs text-gray-500 dark:text-gray-400;
+  }
+
+  /* CSV Import */
+  .csv-import {
+    @apply min-h-[200px];
+  }
+
+  .csv-upload-area {
+    @apply py-4;
+  }
+
+  .csv-mapping-grid {
+    @apply flex flex-col gap-2;
+  }
+
+  .csv-mapping-row {
+    @apply flex items-center gap-3;
+  }
+
+  .csv-mapping-header {
+    @apply text-sm font-mono bg-gray-100 px-2 py-1 rounded truncate
+           dark:bg-gray-700 dark:text-gray-300;
+    min-width: 120px;
+    max-width: 180px;
+  }
+
+  .csv-mapping-arrow {
+    @apply text-gray-400 text-sm flex-shrink-0 dark:text-gray-500;
+  }
+
+  .csv-mapping-select {
+    @apply text-sm;
+    min-width: 160px;
+  }
+
+  .csv-preview-table-wrap {
+    @apply overflow-x-auto max-h-48 border border-gray-200 rounded
+           dark:border-gray-700;
+  }
+
+  .csv-progress-bar {
+    @apply w-full bg-gray-200 rounded-full h-2 overflow-hidden
+           dark:bg-gray-700;
+  }
+
+  .csv-progress-fill {
+    @apply h-full bg-blue-600 rounded-full transition-all;
+  }
+
+  .csv-error-list {
+    @apply mt-2;
+  }
+
+  .csv-error-scroll {
+    @apply max-h-40 overflow-y-auto border border-red-100 rounded p-2
+           dark:border-red-800;
+  }
+
+  .csv-error-item {
+    @apply text-xs text-red-600 py-1 border-b border-red-50 last:border-0
+           dark:text-red-400 dark:border-red-900;
+  }
+
+  /* Expression Builder */
+  .expr-builder {
+    @apply flex flex-col gap-2;
+  }
+
+  .expr-builder-header {
+    @apply flex items-center justify-between;
+  }
+
+  .expr-mode-toggle {
+    @apply inline-flex rounded-md border border-gray-300 overflow-hidden
+           dark:border-gray-600;
+  }
+
+  .expr-mode-btn {
+    @apply px-3 py-1 text-xs border-none bg-white text-gray-600 cursor-pointer
+           transition-colors dark:bg-gray-700 dark:text-gray-400;
+  }
+
+  .expr-mode-btn:disabled {
+    @apply cursor-default;
+  }
+
+  .expr-mode-active {
+    @apply bg-blue-600 text-white;
+  }
+
+  .expr-rows {
+    @apply flex flex-col gap-1;
+  }
+
+  .expr-row {
+    @apply flex items-center gap-2;
+  }
+
+  .expr-field-wrap {
+    @apply flex-1;
+    min-width: 140px;
+  }
+
+  .expr-field-input {
+    @apply font-mono text-sm;
+  }
+
+  .expr-op-select {
+    width: 110px;
+    flex-shrink: 0;
+  }
+
+  .expr-value-input {
+    @apply flex-1;
+    min-width: 100px;
+  }
+
+  .expr-combinator {
+    @apply flex justify-center py-0.5;
+  }
+
+  .expr-combinator-btn {
+    @apply px-3 py-0.5 text-xs font-medium rounded-full
+           bg-gray-100 text-gray-600 border border-gray-300
+           cursor-pointer hover:bg-gray-200 transition-colors
+           dark:bg-gray-700 dark:text-gray-400 dark:border-gray-600
+           dark:hover:bg-gray-600;
+  }
+
+  .expr-actions {
+    @apply mt-1;
+  }
+
+  .expr-preview {
+    @apply flex items-center gap-2 mt-1 px-2 py-1 bg-gray-50 rounded border border-gray-200
+           dark:bg-gray-800 dark:border-gray-700;
+  }
+
+  .expr-preview-code {
+    @apply text-xs font-mono text-gray-700 dark:text-gray-300;
+  }
+
+  /* Condition Builder */
+  .cond-builder {
+    @apply flex flex-col gap-2;
+  }
+
+  .cond-row {
+    @apply flex items-center gap-2;
+  }
+
+  .cond-field-wrap {
+    @apply flex-1;
+    min-width: 120px;
+  }
+
+  .cond-op-select {
+    width: 170px;
+    flex-shrink: 0;
+  }
+
+  .cond-value-input {
+    @apply flex-1;
+    min-width: 100px;
+  }
+
+  .cond-actions {
+    @apply mt-1;
+  }
+
+  /* Related Records Editor */
+  .rel-editor {
+    @apply border border-gray-200 rounded-lg p-4 bg-gray-50
+           dark:border-gray-700 dark:bg-gray-800;
+  }
+
+  .rel-editor-header {
+    @apply flex items-center justify-between mb-3;
+  }
+
+  .rel-editor-mode-select {
+    @apply text-xs;
+    width: 90px;
+    padding: 0.2rem 0.4rem;
+  }
+
+  .rel-editor-table-wrap {
+    @apply overflow-x-auto;
+  }
+
+  .rel-editor-table {
+    @apply w-full text-sm border-collapse;
+  }
+
+  .rel-editor-th {
+    @apply text-left text-xs font-medium text-gray-500 uppercase tracking-wider
+           px-3 py-2 border-b border-gray-200 bg-white
+           dark:text-gray-400 dark:border-gray-700 dark:bg-gray-800;
+  }
+
+  .rel-editor-th-actions {
+    @apply text-right;
+    width: 120px;
+  }
+
+  .rel-editor-tr {
+    @apply border-b border-gray-100 dark:border-gray-700;
+  }
+
+  .rel-editor-tr-new {
+    @apply bg-green-50 dark:bg-green-900/20;
+  }
+
+  .rel-editor-tr-editing {
+    @apply bg-blue-50 dark:bg-blue-900/20;
+  }
+
+  .rel-editor-tr-deleted {
+    @apply bg-red-50 opacity-60 dark:bg-red-900/20;
+  }
+
+  .rel-editor-td {
+    @apply px-3 py-2;
+  }
+
+  .rel-editor-td-actions {
+    @apply text-right;
+  }
+
+  .rel-editor-inline-input {
+    @apply text-sm;
+    padding: 0.25rem 0.4rem;
+    min-width: 60px;
+  }
+
+  .rel-editor-actions {
+    @apply mt-2;
+  }
+
+  .btn-xs {
+    @apply text-xs px-2 py-0.5 rounded;
+  }
+}
